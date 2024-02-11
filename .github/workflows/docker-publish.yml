@@ -1,0 +1,57 @@
+name: Docker Publish
+env: { STAGE_PORT: 9091, CONTAINER_PORT: 8080, PRODUCTION_PORT: 9092 }
+on:
+  workflow_dispatch:
+jobs:
+  dockerize-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Get the code
+        uses: actions/checkout@v4
+      - name: 🐟 Build stage image
+        run: |
+          docker build -f Dockerfile.prod -t "${{ secrets.WF_DOCKER_STAGE_IMAGE_NAME }}" . \
+          --build-arg NODE_ENV="production" \
+          --build-arg BACKEND_URL="${{ secrets.WF_BACKEND_STAGE_URL }}"
+      - name: 🐟 Build production image
+        run: |
+          docker build -f Dockerfile.prod -t "${{ secrets.WF_DOCKER_PRODUCTION_IMAGE_NAME }}" . \
+          --build-arg NODE_ENV="production" \
+          --build-arg BACKEND_URL="${{ secrets.WF_BACKEND_PRODUCTION_URL }}"
+      - name: 🏡 Run stage image
+        run: docker run -d -p ${{ env.STAGE_PORT }}:${{ env.CONTAINER_PORT }} ${{ secrets.WF_DOCKER_STAGE_IMAGE_NAME }}
+      - name: 🏡 Run production image
+        run: docker run -d -p ${{ env.PRODUCTION_PORT }}:${{ env.CONTAINER_PORT }} ${{ secrets.WF_DOCKER_PRODUCTION_IMAGE_NAME }}
+      - name: 💤 Sleep for 10 seconds
+        run: sleep 10
+      - name: 📞 Calling stage api
+        run: curl http://localhost:${{ env.STAGE_PORT }}
+      - name: 📞 Calling production api
+        run: curl http://localhost:${{ env.PRODUCTION_PORT }}
+      - name: 2️⃣ Docker stage account login
+        run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+        env:
+          DOCKER_USERNAME: ${{ secrets.WF_DOCKER_STAGE_ACCOUNT_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.WF_DOCKER_STAGE_ACCOUNT_PASSWORD }}
+      - name: 🌩️ Push stage image to docker hub
+        run: docker push ${{ secrets.WF_DOCKER_STAGE_IMAGE_NAME }}
+      - name: 2️⃣ Docker stage account logout
+        run: docker logout
+      - name: 1️⃣ Docker production account login
+        run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+        env:
+          DOCKER_USERNAME: ${{ secrets.WF_DOCKER_PRODUCTION_ACCOUNT_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.WF_DOCKER_PRODUCTION_ACCOUNT_PASSWORD }}
+      - name: 🌩️ Push production image to docker hub
+        run: docker push ${{ secrets.WF_DOCKER_PRODUCTION_IMAGE_NAME }}
+      - name: 1️⃣ Docker production account logout
+        run: docker logout
+      - name: 💬 Sending Notification
+        uses: stegzilla/discord-notify@v4
+        with:
+          title: dockerize
+          include_image: true
+          username: ${{ github.actor }}
+          message: ✅ Docker images published!
+          webhook_url: ${{ secrets.WF_DISCORD_WEBHOOK_URL }}
+          avatar_url: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
