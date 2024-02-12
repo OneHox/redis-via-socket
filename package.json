@@ -16,7 +16,6 @@
     ],
     "modulePathIgnorePatterns": [
       "<rootDir>/dist/",
-      "<rootDir>/client/"
     ]
   },
   "keywords": [],
